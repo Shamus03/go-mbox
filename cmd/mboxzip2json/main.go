@@ -61,11 +61,14 @@ func extractEmailsFromZip(path string) ([]email, error) {
 		return nil, fmt.Errorf("creating zip reader: %v", err)
 	}
 
-	var emails []email
+	emails := make([]email, 0)
 
 	if err := descendZip(path, z, func(zf *zip.File) error {
-		switch filepath.Ext(zf.FileInfo().Name()) {
-		case ".mbox":
+		fileName := zf.FileInfo().Name()
+
+		switch true {
+		case strings.HasSuffix(fileName, ".mbox"):
+		case strings.HasSuffix(fileName, ".mbox.txt"):
 		default:
 			return nil
 		}
@@ -77,7 +80,6 @@ func extractEmailsFromZip(path string) ([]email, error) {
 		defer r.Close()
 
 		ms := mbox.NewScanner(r)
-
 		for ms.Next() {
 			m := ms.Message()
 
@@ -90,7 +92,11 @@ func extractEmailsFromZip(path string) ([]email, error) {
 				return strings.Join(m.Header[k], ", ")
 			}
 
-			ts, err := time.Parse(time.RFC1123Z, xh("Date"))
+			ts, err := newTimeParser(
+				"Mon, 2 Jan 2006 15:04:05 -0700",
+				"Mon, 2 Jan 2006 15:04:05 -0700 (MST)",
+				"Mon, 2 Jan 2006 15:04:05 MST",
+			).Parse(xh("Date"))
 			if err != nil {
 				return fmt.Errorf("reading Date header: %v", err)
 			}
@@ -172,4 +178,26 @@ func newZipFromReader(file io.ReadCloser, size int64) (*zip.Reader, error) {
 	}
 
 	return reader, nil
+}
+
+type timeParser struct {
+	formats []string
+}
+
+func newTimeParser(formats ...string) *timeParser {
+	return &timeParser{
+		formats: formats,
+	}
+}
+
+func (p *timeParser) Parse(s string) (time.Time, error) {
+	var lastErr error
+	for _, f := range p.formats {
+		t, err := time.Parse(f, s)
+		if err == nil {
+			return t, nil
+		}
+		lastErr = err
+	}
+	return time.Time{}, lastErr
 }
