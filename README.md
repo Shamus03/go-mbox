@@ -5,7 +5,7 @@
 
 Command to extract all emails from a nested ZIP archive containing mbox files.  Useful for exporting emails from Google Vault.
 
-To install:
+To install/update:
 ```bash
-go get github.com/Shamus03/go-mbox/cmd/mboxzip2json
+GO111MODULE=on go get -u github.com/Shamus03/go-mbox/cmd/mboxzip2json
 ```
