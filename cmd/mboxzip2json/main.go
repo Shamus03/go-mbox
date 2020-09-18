@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sam-falvo/mbox"
+	"github.com/emersion/go-mbox"
 )
 
 func main() {
@@ -45,7 +45,6 @@ type email struct {
 }
 
 func extractEmailsFromZip(path string) ([]email, error) {
-
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open: %v", err)
@@ -64,41 +63,34 @@ func extractEmailsFromZip(path string) ([]email, error) {
 
 	var emails []email
 
-	if err := descendZip(z, func(zf *zip.File) error {
+	if err := descendZip(path, z, func(zf *zip.File) error {
+		switch filepath.Ext(zf.FileInfo().Name()) {
+		case ".mbox":
+		default:
+			return nil
+		}
+
 		r, err := zf.Open()
 		if err != nil {
 			return fmt.Errorf("open archived file: %v", err)
 		}
 		defer r.Close()
 
-		mr, err := mbox.CreateMboxStream(r)
-		if err != nil {
-			return fmt.Errorf("create mbox stream: %v", err)
-		}
+		ms := mbox.NewScanner(r)
 
-		for {
-			m, err := mr.ReadMessage()
-			if err != nil {
-				if err == io.EOF {
-					return nil
-				}
-				return fmt.Errorf("read mbox message: %v", err)
-			}
+		for ms.Next() {
+			m := ms.Message()
 
-			bodyBytes, err := ioutil.ReadAll(m.BodyReader())
+			bodyBytes, err := ioutil.ReadAll(m.Body)
 			if err != nil {
 				return fmt.Errorf("read message body: %v", err)
 			}
 
-			h := m.Headers()
 			xh := func(k string) string {
-				return strings.Join(h[k], ", ")
+				return strings.Join(m.Header[k], ", ")
 			}
 
-			ts, err := timeParseMultiple(xh("Date"),
-				"Mon, 2 Jan 2006 15:04:05 -0700",
-				"Mon, 2 Jan 2006 15:04:05 -0700 (MST)",
-			)
+			ts, err := time.Parse(time.RFC1123Z, xh("Date"))
 			if err != nil {
 				return fmt.Errorf("reading Date header: %v", err)
 			}
@@ -112,6 +104,12 @@ func extractEmailsFromZip(path string) ([]email, error) {
 				Timestamp: ts,
 			})
 		}
+
+		if err := ms.Err(); err != nil {
+			return fmt.Errorf("scanning mbox messages: %v", err)
+		}
+
+		return nil
 	}); err != nil {
 		return nil, fmt.Errorf("reading zip file: %v", err)
 	}
@@ -119,7 +117,7 @@ func extractEmailsFromZip(path string) ([]email, error) {
 	return emails, nil
 }
 
-func descendZip(z *zip.Reader, fn func(*zip.File) error) error {
+func descendZip(pathPrefix string, z *zip.Reader, fn func(*zip.File) error) error {
 	for _, f := range z.File {
 		fi := f.FileInfo()
 		if fi.IsDir() {
@@ -132,18 +130,20 @@ func descendZip(z *zip.Reader, fn func(*zip.File) error) error {
 		}
 		defer r.Close()
 
+		fullPath := filepath.Join(pathPrefix, fi.Name())
+
 		switch filepath.Ext(fi.Name()) {
 		case ".zip":
 			zr, err := newZipFromReader(r, fi.Size())
 			if err != nil {
 				return fmt.Errorf("newZipFromReader: %v", err)
 			}
-			if err := descendZip(zr, fn); err != nil {
-				return fmt.Errorf("descendZip: %v", err)
+			if err := descendZip(fullPath, zr, fn); err != nil {
+				return err
 			}
 		default:
 			if err := fn(f); err != nil {
-				return fmt.Errorf("processing file %s: %v", fi.Name(), err)
+				return fmt.Errorf("processing file %s: %v", fullPath, err)
 			}
 		}
 	}
@@ -172,15 +172,4 @@ func newZipFromReader(file io.ReadCloser, size int64) (*zip.Reader, error) {
 	}
 
 	return reader, nil
-}
-
-func timeParseMultiple(s string, fmt ...string) (time.Time, error) {
-	var err error
-	for _, f := range fmt {
-		t, err := time.Parse(f, s)
-		if err == nil {
-			return t, nil
-		}
-	}
-	return time.Time{}, err
 }

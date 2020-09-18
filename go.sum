@@ -1,2 +1,2 @@
-github.com/sam-falvo/mbox v0.0.0-20130314051957-766c02448eff h1:jTQzZB9sE+W7cnleFufvb59K/hJsMbC4AxRxrE3l6qA=
-github.com/sam-falvo/mbox v0.0.0-20130314051957-766c02448eff/go.mod h1:QWsCGQuTILI4lL4xT6Od4YZZTzomXCLskiblqM/AD2Q=
+github.com/emersion/go-mbox v0.1.0 h1:wboSw4Ia7nRst4sem5xfUWBxnXnvNwReNjDQM14owps=
+github.com/emersion/go-mbox v0.1.0/go.mod h1:Yp9IVuuOYLEuMv4yjgDHvhb5mHOcYH6x92Oas3QqEZI=
